@@ -5,13 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kalkulator Desain Jaringan FO</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            overflow-x: auto; /* Memizinkan pan/zoom horizontal */
         }
         
-        /* CSS untuk membuat diagram pohon */
+        /* --- CSS untuk membuat diagram pohon --- */
         .tree ul {
             position: relative;
             padding-left: 20px;
@@ -24,34 +26,34 @@
             padding-top: 10px;
         }
 
-        /* Garis vertikal */
         .tree ul::before {
             content: '';
             position: absolute;
             top: 0;
             bottom: 0;
             left: 0;
-            border-left: 2px solid #cbd5e1; /* gray-300 */
+            border-left: 2px solid #cbd5e1;
         }
 
         .tree li::before {
             content: '';
             position: absolute;
-            top: 28px; /* Sesuaikan agar pas dengan tengah node */
+            top: 28px;
             left: -20px;
             width: 20px;
             height: 2px;
-            background-color: #cbd5e1; /* gray-300 */
+            background-color: #cbd5e1;
         }
 
         .tree li:last-child > ul::before {
             bottom: auto;
-            height: 28px; /* Pas dengan ::before li */
+            height: 28px;
         }
+        /* --- Akhir CSS Diagram Pohon --- */
 
         .node {
             background-color: white;
-            border: 1px solid #e2e8f0; /* gray-200 */
+            border: 1px solid #e2e8f0;
             border-radius: 8px;
             padding: 12px;
             display: inline-block;
@@ -63,7 +65,7 @@
         .node-content {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: center; /* Mengatur item agar sejajar */
         }
 
         .node-controls {
@@ -85,70 +87,112 @@
             font-size: 14px;
         }
         
-        .node-controls button {
-            background-color: #3b82f6; /* blue-500 */
+        /* Tombol Add (+) */
+        .node-controls .add-splitter-btn {
+            background-color: #3b82f6;
             color: white;
             font-weight: 500;
             cursor: pointer;
         }
-        .node-controls button:hover {
-            background-color: #2563eb; /* blue-600 */
+        .node-controls .add-splitter-btn:hover {
+            background-color: #2563eb;
         }
+        
+        /* --- PERUBAHAN WARNA TOMBOL HAPUS --- */
+        .delete-node-btn {
+            background: none;
+            border: none;
+            color: #9ca3af; /* Abu-abu (gray-400) */
+            font-weight: bold;
+            font-size: 24px;
+            line-height: 1;
+            padding: 0 4px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.15s ease; /* Transisi halus */
+        }
+        .delete-node-btn:hover {
+            color: #4b5563; /* Abu-abu gelap (gray-600) */
+            background-color: #f3f4f6; /* Abu-abu terang (gray-100) */
+        }
+        /* --- AKHIR PERUBAHAN --- */
         
         .node-controls .custom-loss-input {
             width: 80px;
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-4 md:p-8">
+<body class="bg-gray-100 min-h-screen p-4 md:p-8" style="overflow-x: auto;">
 
-    <div class="max-w-7xl mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8">
+    <!-- Kontainer utama (bisa melebar) -->
+    <div class="mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8" style="min-width: 320px;">
+        
+        <!-- Judul -->
         <h1 class="text-2xl md:text-3xl font-bold text-gray-800">Kalkulator & Desainer Jaringan Fiber Optik (PON)</h1>
-        <p class="mt-2 text-gray-600">Mulai dari OLT, tambahkan splitter (ODC/ODP) untuk merancang jaringan Anda dan menghitung redaman (power budget).</p>
+        <p class="mt-2 text-gray-600">Mulai dari OLT, tambahkan splitter (ODC/ODP) untuk merancang jaringan Anda.</p>
     
-        <!-- Kontrol Awal -->
+        <!-- Panel Kontrol Atas -->
         <div class="mt-6 flex flex-wrap gap-4 items-center border-b pb-6 mb-6 border-gray-200">
+            <!-- Input Power Awal -->
             <div>
                 <label for="initial-power" class="block text-sm font-medium text-gray-700">Power Awal OLT (dBm)</label>
                 <input type="number" id="initial-power" value="0.82" step="0.01" class="mt-1 w-32 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
             </div>
+            <!-- Tombol Mulai/Reset -->
             <button id="start-btn" class="self-end px-5 py-2 bg-blue-600 text-white font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                 Mulai / Reset Desain
             </button>
+            <!-- Tombol Simpan Gambar -->
+            <button id="save-image-btn" class="self-end px-5 py-2 bg-green-600 text-white font-medium rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                Simpan sebagai Gambar (PNG)
+            </button>
+        </div>
+        
+        <!-- Indikator Loading (untuk simpan gambar) -->
+        <div id="loading-spinner" class="hidden text-center p-4">
+            <p class="text-blue-600 font-medium">Sedang memproses gambar...</p>
         </div>
     
-        <!-- Area Diagram -->
-        <div id="diagram-container" class="overflow-x-auto p-2">
+        <!-- Area Diagram (bisa melebar) -->
+        <div id="diagram-container" class="p-2 bg-white">
             <p class="text-gray-500">Klik "Mulai / Reset Desain" untuk membuat node OLT.</p>
         </div>
     </div>
 
+    <!-- Awal dari JavaScript -->
     <script>
-        // Data loss untuk setiap splitter (nilai praktis, termasuk insertion loss)
-        // Format: 'Nama': [loss_A, loss_B, ...]
+        // --- DATA KONFIGURASI ---
         const SPLITTER_LOSS_DB = {
             '1:2': [3.8],
-            '1:4': [7.5],
-            '1:8': [11.0],
+            '1:4': [7.5], 
+            '1:8': [11.0], 
             '1:16': [14.2],
             '1:32': [17.5],
             '1:64': [21.0],
-            '90/10': [10.5, 0.9], // [loss port 90%, loss port 10%]
-            '80/20': [7.4, 1.4], // [loss port 80%, loss port 20%]
-            '70/30': [5.7, 2.0], // [loss port 70%, loss port 30%]
+            '90/10': [10.5, 0.9],
+            '80/20': [7.4, 1.4], 
+            '70/30': [5.7, 2.0],
             '60/40': [4.4, 2.6],
             '50/50': [3.4, 3.4],
-            'custom': [] // Akan diisi oleh user
+            'custom': [] 
         };
 
-        let networkData = {}; // Objek untuk menyimpan data pohon jaringan
-        let nodeIdCounter = 0;
+        // --- Variabel Global ---
+        let networkData = {}; 
+        let nodeIdCounter = 0; 
 
+        // --- Ambil Elemen DOM ---
         const startBtn = document.getElementById('start-btn');
         const initialPowerInput = document.getElementById('initial-power');
         const diagramContainer = document.getElementById('diagram-container');
-
+        const saveImageBtn = document.getElementById('save-image-btn');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        
+        // --- Event Listeners ---
         startBtn.addEventListener('click', startApp);
+        saveImageBtn.addEventListener('click', saveAsImage);
+
+        // --- FUNGSI INTI ---
 
         function startApp() {
             nodeIdCounter = 0;
@@ -160,12 +204,11 @@
                 splitType: 'Start',
                 children: []
             };
-            renderNetwork();
+            renderNetwork(); 
         }
 
-        // Fungsi untuk me-render seluruh jaringan dari data
         function renderNetwork() {
-            diagramContainer.innerHTML = '';
+            diagramContainer.innerHTML = ''; 
             const treeRoot = document.createElement('ul');
             treeRoot.className = 'tree';
             
@@ -173,11 +216,9 @@
             treeRoot.appendChild(nodeElement);
             diagramContainer.appendChild(treeRoot);
             
-            // Tambahkan event listener untuk semua elemen kontrol yang baru dibuat
             addEventListeners();
         }
 
-        // Fungsi rekursif untuk membuat elemen HTML dari node data
         function createNodeHtml(node) {
             const li = document.createElement('li');
             
@@ -187,22 +228,34 @@
             if (powerLevel < -28) powerColorClass = 'text-red-600'; // Bad
             
             let splitInfo = node.splitType === 'Start' ? 'Titik Awal' : `Dari ${node.splitType}`;
+            
+            // Tombol hapus (X) jika BUKAN node OLT
+            const deleteButtonHtml = node.splitType !== 'Start' ?
+                `<button class="delete-node-btn" data-node-id="${node.id}" title="Hapus node ini">&times;</button>`
+                : '';
 
+            // Mengelompokkan power dan tombol hapus
             li.innerHTML = `
                 <div class="node" data-id="${node.id}">
                     <div class="node-content">
+                        <!-- Info Node (Kiri) -->
                         <div>
                             <span class="font-bold text-lg text-gray-800">${node.name}</span>
                             <span class="block text-sm text-gray-500">${splitInfo}</span>
                         </div>
-                        <div class="text-right">
-                            <span class="font-bold text-xl ${powerColorClass}">${powerLevel} dBm</span>
-                            <span class="block text-sm text-gray-500">Power</span>
+                        
+                        <!-- Info Power & Tombol Hapus (Kanan) -->
+                        <div class="flex items-center gap-3">
+                            <div class="text-right">
+                                <span class="font-bold text-xl ${powerColorClass}">${powerLevel} dBm</span>
+                                <span class="block text-sm text-gray-500">Power</span>
+                            </div>
+                            ${deleteButtonHtml}
                         </div>
                     </div>
                     
                     <div class="node-controls">
-                        <input type="text" class="node-label-input" placeholder="Label (cth: ODP-01)" data-node-id="${node.id}">
+                        <input type="text" class="node-label-input" placeholder="Label (cth: ODP-01)" data-node-id="${node.id}" value="${node.label || ''}">
                         <select class="splitter-select" data-node-id="${node.id}">
                             <option value="">Pilih Splitter</option>
                             ${Object.keys(SPLITTER_LOSS_DB).map(key => `<option value="${key}">${key}</option>`).join('')}
@@ -216,25 +269,32 @@
             if (node.children && node.children.length > 0) {
                 const ul = document.createElement('ul');
                 node.children.forEach(childNode => {
-                    ul.appendChild(createNodeHtml(childNode));
+                    ul.appendChild(createNodeHtml(childNode)); 
                 });
                 li.appendChild(ul);
             }
             
-            return li;
+            return li; 
         }
 
-        // Fungsi untuk menambahkan event listener ke tombol dan select
         function addEventListeners() {
-            // Event untuk tombol "Add Splitter"
+            // Event listener untuk tombol Tambah (+)
             document.querySelectorAll('.add-splitter-btn').forEach(button => {
-                button.addEventListener('click', () => {
-                    const nodeId = button.dataset.nodeId;
+                button.addEventListener('click', (e) => {
+                    const nodeId = e.target.dataset.nodeId;
                     addSplitter(nodeId);
                 });
             });
 
-            // Event untuk select splitter (menampilkan/menyembunyikan input custom loss)
+            // Event listener untuk tombol Hapus (X)
+            document.querySelectorAll('.delete-node-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const nodeId = e.currentTarget.dataset.nodeId;
+                    deleteNode(nodeId);
+                });
+            });
+
+            // Event listener untuk dropdown splitter
             document.querySelectorAll('.splitter-select').forEach(select => {
                 select.addEventListener('change', (e) => {
                     const nodeId = e.target.dataset.nodeId;
@@ -246,9 +306,19 @@
                     }
                 });
             });
+            
+            // Event listener untuk input label
+            document.querySelectorAll('.node-label-input').forEach(input => {
+                input.addEventListener('change', (e) => {
+                   const nodeId = e.target.dataset.nodeId;
+                   const node = findNodeById(networkData, parseInt(nodeId));
+                   if(node) {
+                       node.label = e.target.value; 
+                   }
+                });
+            });
         }
         
-        // Fungsi untuk menambahkan splitter baru
         function addSplitter(parentId) {
             const parentNode = findNodeById(networkData, parseInt(parentId));
             if (!parentNode) return;
@@ -259,7 +329,7 @@
             
             const splitType = splitterSelect.value;
             if (!splitType) {
-                alert("Silakan pilih tipe splitter.");
+                showCustomMessage("Silakan pilih tipe splitter.", "error");
                 return;
             }
 
@@ -269,30 +339,30 @@
             if (splitType === 'custom') {
                 const customLoss = parseFloat(customLossInput.value);
                 if (isNaN(customLoss)) {
-                    alert("Masukkan nilai loss (dB) untuk splitter custom.");
+                    showCustomMessage("Masukkan nilai loss (dB) untuk splitter custom.", "error");
                     return;
                 }
                 losses = [customLoss];
                 outputNames = ['Custom Port'];
             } else {
                 losses = SPLITTER_LOSS_DB[splitType];
-                // Buat nama port
-                if (losses.length === 1) { // Splitter seimbang (1:N)
+                if (losses.length === 1) { 
                     const N = parseInt(splitType.split(':')[1]);
                     for (let i = 1; i <= N; i++) {
                         outputNames.push(`Port ${i}`);
                     }
-                    // Duplikasi loss untuk semua port
-                    losses = Array(N).fill(losses[0]);
-                } else { // Splitter tidak seimbang (e.g., 80/20)
+                    losses = Array(N).fill(losses[0]); 
+                } else { 
                     const ratios = splitType.split('/');
                     outputNames = [`Port ${ratios[0]}%`, `Port ${ratios[1]}%`];
                 }
             }
 
             const baseLabel = labelInput.value.trim() || 'Split';
+            parentNode.label = baseLabel; 
 
-            // Buat node anak baru
+            parentNode.children = [];
+
             for (let i = 0; i < losses.length; i++) {
                 nodeIdCounter++;
                 const newPower = parentNode.power - losses[i];
@@ -303,16 +373,44 @@
                     name: nodeName,
                     power: newPower,
                     splitType: `${splitType} (Loss: ${losses[i].toFixed(1)} dB)`,
-                    children: []
+                    children: [],
+                    label: '' 
                 };
                 parentNode.children.push(newNode);
             }
             
-            // Render ulang seluruh jaringan
-            renderNetwork();
+            nodeIdCounter = findMaxId(networkData);
+
+            renderNetwork(); 
         }
 
-        // Fungsi helper untuk mencari node berdasarkan ID di pohon data
+        // --- FUNGSI HAPUS NODE ---
+
+        function deleteNode(nodeId) {
+            const id = parseInt(nodeId);
+            findAndRemoveNode(networkData, id); // Hapus data node
+            renderNetwork(); // Gambar ulang
+        }
+
+        function findAndRemoveNode(parent, idToRemove) {
+            if (!parent.children) {
+                return;
+            }
+            
+            const indexToRemove = parent.children.findIndex(child => child.id === idToRemove);
+            
+            if (indexToRemove > -1) {
+                parent.children.splice(indexToRemove, 1);
+            } else {
+                for (const child of parent.children) {
+                    findAndRemoveNode(child, idToRemove);
+                }
+            }
+        }
+
+
+        // --- FUNGSI HELPER (BANTUAN) ---
+
         function findNodeById(node, id) {
             if (node.id === id) {
                 return node;
@@ -328,8 +426,83 @@
             return null;
         }
 
-        // Mulai aplikasi saat halaman dimuat
+        function findMaxId(node) {
+            let max = node.id;
+            if (node.children) {
+                for (const child of node.children) {
+                    max = Math.max(max, findMaxId(child));
+                }
+            }
+            return max;
+        }
+
+        // --- FUNGSI FITUR ---
+
+        function saveAsImage() {
+            loadingSpinner.classList.remove('hidden');
+            
+            const scrollX = window.scrollX;
+            const scrollY = window.scrollY;
+            window.scrollTo(0, 0);
+
+            setTimeout(() => {
+                const diagramElement = document.getElementById('diagram-container');
+                
+                html2canvas(diagramElement, {
+                    scale: 2, 
+                    backgroundColor: '#ffffff',
+                    width: diagramElement.scrollWidth, 
+                    height: diagramElement.scrollHeight
+                }).then(canvas => {
+                    const imageURL = canvas.toDataURL('image/png');
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = imageURL;
+                    downloadLink.download = 'desain-jaringan-fo.png';
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                    loadingSpinner.classList.add('hidden');
+                    window.scrollTo(scrollX, scrollY);
+                }).catch(err => {
+                    console.error('Gagal menyimpan gambar:', err);
+                    loadingSpinner.classList.add('hidden');
+                    showCustomMessage("Gagal menyimpan gambar.", "error");
+                    window.scrollTo(scrollX, scrollY);
+                });
+            }, 100);
+        }
+        
+        function showCustomMessage(message, type = "info") {
+            let messageBox = document.getElementById('custom-message-box');
+            if (!messageBox) {
+                messageBox = document.createElement('div');
+                messageBox.id = 'custom-message-box';
+                Object.assign(messageBox.style, {
+                    position: 'fixed',
+                    top: '20px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    padding: '12px 20px',
+                    borderRadius: '8px',
+                    color: 'white',
+                    zIndex: '100',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                });
+                document.body.appendChild(messageBox);
+            }
+
+            messageBox.textContent = message;
+            messageBox.style.backgroundColor = type === 'error' ? '#e53e3e' : '#3b82f6'; 
+            messageBox.style.display = 'block';
+
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, 3000);
+        }
+
+        // --- INISIALISASI ---
         startApp();
     </script>
 </body>
 </html>
+
